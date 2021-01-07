@@ -9,7 +9,7 @@ from homeassistant.exceptions import ServiceNotFound
 from homeassistant.helpers.state import AsyncTrackStates
 from homeassistant.core import HomeAssistant
 
-from .const import DATA_HAVCS_SETTINGS, INTEGRATION, DATA_HAVCS_ITEMS, ATTR_DEVICE_VISABLE, ATTR_DEVICE_ID, ATTR_DEVICE_ENTITY_ID, ATTR_DEVICE_TYPE, ATTR_DEVICE_NAME, ATTR_DEVICE_ZONE, ATTR_DEVICE_ATTRIBUTES, ATTR_DEVICE_ACTIONS, ATTR_DEVICE_PROPERTIES
+from .const import DATA_HAVCS_SETTINGS, INTEGRATION, DATA_HAVCS_ITEMS, ATTR_DEVICE_VISABLE, ATTR_DEVICE_ID, ATTR_DEVICE_ENTITY_ID, ATTR_DEVICE_TYPE, ATTR_DEVICE_NAME, ATTR_DEVICE_ZONE, ATTR_DEVICE_ATTRIBUTES, ATTR_DEVICE_ACTIONS, ATTR_DEVICE_ICON, ATTR_DEVICE_PROPERTIES
 from .device import VoiceControllDevice
 
 
@@ -29,7 +29,7 @@ class VoiceControlProcessor:
     def _discovery_process_device_type(self, raw_device_type) -> None:
         raise NotImplementedError()
 
-    def _discovery_process_device_info(self, device_id, device_type, device_name, zone, properties, actions) -> None:
+    def _discovery_process_device_info(self, device_id, device_type, device_name, zone, properties, actions, icon) -> None:
         raise NotImplementedError()
   
     def _control_process_propertites(self, device_properties, action) -> None:
@@ -69,14 +69,15 @@ class VoiceControlProcessor:
             _LOGGER.debug("[%s] request from %s match filter, return blank info", LOGGER_NAME, request_from)
             return None, devices, entity_ids
         for vc_device in self.vcdm.all(self._hass):
-            device_id, raw_device_type, device_name, zone, device_properties, raw_actions = self.vcdm.get_device_attrs(vc_device.attributes)
+            _LOGGER.debug("[%s] attributes %s", LOGGER_NAME, vc_device.attributes)
+            device_id, raw_device_type, device_name, zone, device_properties, raw_actions, icon = self.vcdm.get_device_attrs(vc_device.attributes)
             properties = self._discovery_process_propertites(device_properties)
             actions = self._discovery_process_actions(device_properties, raw_actions)
             device_type = self._discovery_process_device_type(raw_device_type)
             if None in (device_type, device_name, zone) or [] in (properties, actions):
                 _LOGGER.debug("[%s] discovery command: can't get all info of entity %s, pass. [device_type = %s(%s), device_name = %s, zone = %s, properties = %s, actions = %s(%s)]", LOGGER_NAME, device_id, device_type, raw_device_type, device_name, zone, properties, actions, raw_actions)
             else:
-                devices.append(self._discovery_process_device_info(device_id, device_type, device_name, zone, properties, actions))
+                devices.append(self._discovery_process_device_info(device_id, device_type, device_name, zone, properties, actions, icon))
                 entity_ids.append(device_id)
         return None, devices, entity_ids
 
@@ -218,6 +219,7 @@ class VoiceControlDeviceManager:
         device_name = raw_attributes.get(ATTR_DEVICE_NAME)
         device_type = None
         zone = None
+        icon = None
         device_type = raw_attributes.get(ATTR_DEVICE_TYPE)
         # zone = raw_attributes.get(ATTR_DEVICE_ZONE)
         entity_ids = self.get_device_related_entities(hass, raw_attributes, device_type)
@@ -228,6 +230,7 @@ class VoiceControlDeviceManager:
             device_name = self.get_device_name(hass, entity_id, raw_attributes, self._places, self._device_name_constraints) if device_name is None else device_name
             device_type = self.get_device_type(hass, entity_id, raw_attributes, device_name) if device_type is None else device_type
             zone = self.get_device_zone(hass, entity_id, raw_attributes, self._places, self._zone_constraints) if zone is None else zone
+            icon = self.get_device_icon(hass, entity_id, raw_attributes) if icon is None else icon
             properties += self.get_device_properties(hass, entity_id, raw_attributes)         
             actions += self.get_device_actions(hass, entity_id, raw_attributes, device_type)
 
@@ -240,6 +243,7 @@ class VoiceControlDeviceManager:
             ATTR_DEVICE_TYPE: device_type,
             ATTR_DEVICE_NAME: device_name,
             ATTR_DEVICE_ZONE: zone,
+            ATTR_DEVICE_ICON: icon,
             ATTR_DEVICE_PROPERTIES: properties,
             ATTR_DEVICE_ACTIONS: actions
         }
@@ -265,7 +269,7 @@ class VoiceControlDeviceManager:
             #     entity_registry._async_update_entity(entity_id, device_id=device.device_id)
 
     def get_device_attrs(self, device_attributes) -> list:
-        return device_attributes.get(ATTR_DEVICE_ID),device_attributes.get(ATTR_DEVICE_TYPE),device_attributes.get(ATTR_DEVICE_NAME),device_attributes.get(ATTR_DEVICE_ZONE),device_attributes.get(ATTR_DEVICE_PROPERTIES),device_attributes.get(ATTR_DEVICE_ACTIONS)
+        return device_attributes.get(ATTR_DEVICE_ID),device_attributes.get(ATTR_DEVICE_TYPE),device_attributes.get(ATTR_DEVICE_NAME),device_attributes.get(ATTR_DEVICE_ZONE),device_attributes.get(ATTR_DEVICE_PROPERTIES),device_attributes.get(ATTR_DEVICE_ACTIONS),device_attributes.get(ATTR_DEVICE_ICON)
 
     def get_device_related_entities(self, hass, raw_attributes: dict, device_type: str = None) -> list:
         entity_ids = []
@@ -364,6 +368,17 @@ class VoiceControlDeviceManager:
             return zone if zone in zone_constraints else None
         else:
             return zone
+
+    def get_device_icon(self, hass, entity_id, raw_attributes) -> str:
+        if ATTR_DEVICE_ICON in raw_attributes:
+            return raw_attributes[ATTR_DEVICE_ICON]
+
+        state = hass.states.get(entity_id)
+        if state:
+            icon = state.attributes.get('icon')
+            if icon:
+                return icon.replace(':', '-')
+        return None
 
     def get_device_properties(self, hass, entity_id, raw_attributes, attributes_constrains = []) -> list:
         properties = []

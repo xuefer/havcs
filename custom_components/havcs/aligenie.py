@@ -1,6 +1,7 @@
 import json
 from urllib.request import urlopen
 import logging
+import os.path
 
 import async_timeout
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
@@ -14,6 +15,15 @@ _LOGGER = logging.getLogger(__name__)
 LOGGER_NAME = 'aligenie'
 
 DOMAIN = 'aligenie'
+
+icons = {
+    'mdi-pinwheel': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/fan800.png',
+    'mdi-lightbulb': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/light800.png',
+    'mdi-television-classic': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/television800.png',
+    'mdi-access-point-network': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/sensor800.png',
+    'mdi-toggle-switch': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/switch800.png',
+    'mdi-window-shutter': 'https://ai-genie-center.oss-cn-hangzhou.aliyuncs.com/app-data/iot-center/curtain800.png',
+}
 
 async def createHandler(hass, entry):
     mode = ['handler']
@@ -310,7 +320,9 @@ class VoiceControlAligenie(PlatformParameter, VoiceControlProcessor):
         # raw_device_type guess from device_id's domain transfer to platform style
         return raw_device_type if raw_device_type in self._device_type_alias else self.device_type_map_h2p.get(raw_device_type)
 
-    def _discovery_process_device_info(self, device_id,  device_type, device_name, zone, properties, actions):
+    def _discovery_process_device_info(self, device_id,  device_type, device_name, zone, properties, actions, icon):
+        if not icon.startswith('http'):
+            icon = icons.get(icon, 'https://d33wubrfki0l68.cloudfront.net/cbf939aa9147fbe89f0a8db2707b5ffea6c192cf/c7c55/images/favicon-192x192-full.png')
         return {
             'deviceId': encrypt_device_id(device_id),
             'deviceName': device_name,
@@ -318,7 +330,7 @@ class VoiceControlAligenie(PlatformParameter, VoiceControlProcessor):
             'zone': zone,
             'model': device_name,
             'brand': 'HomeAssistant',
-            'icon': 'https://d33wubrfki0l68.cloudfront.net/cbf939aa9147fbe89f0a8db2707b5ffea6c192cf/c7c55/images/favicon-192x192-full.png',
+            'icon': icon,
             'properties': properties,
             'actions': actions
             #'extensions':{'extension1':'','extension2':''}
