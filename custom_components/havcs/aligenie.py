@@ -6,6 +6,7 @@ import async_timeout
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from .util import decrypt_device_id, encrypt_device_id
 from .helper import VoiceControlProcessor, VoiceControlDeviceManager
+from .helper import clamp, rclamp
 from .const import ATTR_DEVICE_ACTIONS
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,10 +40,13 @@ class PlatformParameter:
     device_attribute_map_h2p = {
         'power_state': 'powerstate',
         'color': 'color',
+        'colorTemperature': 'color_temp',
+        'colorTemperatureStep': 'color_temp',
         'temperature': 'temperature',
         'humidity': 'humidity',
         # '': 'windspeed',
         'brightness': 'brightness',
+        'brightnessStep': 'brightness',
         # '': 'direction',
         # '': 'angle',
         'pm25': 'pm2.5',
@@ -154,10 +158,26 @@ class PlatformParameter:
         'light': {
             'TurnOn':  'turn_on',
             'TurnOff': 'turn_off',
-            'SetBrightness':        lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_pct': payload['value']}]),
-            'AdjustUpBrightness':   lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_pct': min(attributes['brightness_pct'] + payload['value'], 100)}]),
-            'AdjustDownBrightness': lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_pct': max(attributes['brightness_pct'] - payload['value'], 0)}]),
-            'SetColor':             lambda state, attributes, payload: (['light'], ['turn_on'], [{"color_name": payload['value']}])
+            'SetBrightness':        lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_pct': clamp(payload['value'], 1, 100)}]),
+            'AdjustUpBrightness':   lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_step_pct': int(payload['value'])}]),
+            'AdjustDownBrightness': lambda state, attributes, payload: (['light'], ['turn_on'], [{'brightness_step_pct': int(payload['value'])}]),
+            'SetColor':             lambda state, attributes, payload: (['light'], ['turn_on'], [{"color_name": payload['value']}]),
+            'SetColorTemperature':        lambda state, attributes, payload:
+                (['light'], ['turn_on'], [{'color_temp':
+                    rclamp(payload['value'], state.attributes['min_mireds'], state.attributes['max_mireds'])
+                }]),
+            'AdjustUpColorTemperature':   lambda state, attributes, payload:
+                (['light'], ['turn_on'], [{'color_temp':
+                    clamp(state.attributes['color_temp'] - int(payload['value']) / 100 * (state.attributes['max_mireds'] - state.attributes['min_mireds']),
+                        state.attributes['min_mireds'],
+                        state.attributes['max_mireds'])
+                }]),
+            'AdjustDownColorTemperature': lambda state, attributes, payload:
+                (['light'], ['turn_on'], [{'color_temp':
+                    clamp(state.attributes['color_temp'] + int(payload['value']) / 100 * (state.attributes['max_mireds'] - state.attributes['min_mireds']),
+                        state.attributes['min_mireds'],
+                        state.attributes['max_mireds'])
+                }]),
         },
         'havcs':{
             'TurnOn': lambda state, attributes, payload:([cmnd[0] for cmnd in attributes[ATTR_DEVICE_ACTIONS]['turn_on']], [cmnd[1] for cmnd in attributes[ATTR_DEVICE_ACTIONS]['turn_on']], [json.loads(cmnd[2]) for cmnd in attributes[ATTR_DEVICE_ACTIONS]['turn_on']]) if attributes.get(ATTR_DEVICE_ACTIONS) else (['input_boolean'], ['turn_on'], [{}]),

@@ -447,4 +447,17 @@ class VoiceControlDeviceManager:
     
     def get_sensor_actions_from_properties(self, properties) -> list:
         return [ 'query_' + device_property.get('attribute') for device_property in properties]
-    
+
+def clamp(value, min_value, max_value):
+    if value == 'min':
+        return min_value
+    if value == 'max':
+        return max_value
+    return min(max(float(value), min_value), max_value)
+
+def rclamp(value, min_value, max_value):
+    if value == 'max':
+        return min_value
+    if value == 'min':
+        return max_value
+    return min(max(float(value), min_value), max_value)
